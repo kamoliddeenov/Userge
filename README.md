@@ -1,5 +1,5 @@
 <p align="center">
-    <a href="https://github.com/UsergeTeam/Userge">
+    <a href="https://github.com/kamoliddeenov">
         <img src="resources/userge.png" alt="Userge">
     </a>
     <br>
