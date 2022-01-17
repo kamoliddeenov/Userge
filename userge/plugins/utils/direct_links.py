@@ -1,4 +1,4 @@
-# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2022 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
@@ -54,13 +54,15 @@ async def direct_(message: Message):
             reply += f" 👉 {await osdn(link)}\n"
         elif 'github.com' in link:
             reply += f" 👉 {await github(link)}\n"
+        elif 'anonfiles.com' in link:
+            reply += f" 👉 {await anonfiles(link)}\n"
         elif 'androidfilehost.com' in link:
             reply += f" 👉 {await androidfilehost(link)}\n"
         elif "1drv.ms" in link:
             reply += f" 👉 {await onedrive(link)}\n"
         else:
             reply += f" 👀 {link} is not supported!\n"
-    await message.edit(reply, parse_mode="html")
+    await message.edit(reply, parse_mode="md")
 
 
 @pool.run_in_thread
@@ -125,6 +127,18 @@ def yandex_disk(url: str) -> str:
     except KeyError:
         reply += '`Error: File not found / Download limit reached`\n'
         return reply
+    return reply
+
+
+@pool.run_in_thread
+def anonfiles(url: str) -> str:
+    reply = ''
+    html_s = requests.get(url).content
+    soup = BeautifulSoup(html_s, "html.parser")
+    _url = soup.find("a", attrs={"class": "btn-primary"})["href"]
+    name = _url.rsplit("/", 1)[1]
+    dl_url = _url.replace(" ", "%20")
+    reply += f'[{name}]({dl_url})\n'
     return reply
 
 

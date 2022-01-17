@@ -1,4 +1,4 @@
-# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2022 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
@@ -7,9 +7,9 @@
 # All rights reserved.
 
 import json
-from emoji import get_emoji_regexp
 
 import aiohttp
+from emoji import get_emoji_regexp
 
 from userge import userge, Message, Config
 

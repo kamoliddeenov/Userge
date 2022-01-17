@@ -1,4 +1,4 @@
-# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2022 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
@@ -8,8 +8,8 @@
 
 import time
 from json import dumps
-from emoji import get_emoji_regexp
 
+from emoji import get_emoji_regexp
 from googletrans import Translator, LANGUAGES
 
 from userge import userge, Message, Config, pool
@@ -59,7 +59,7 @@ async def translateme(message: Message):
 
 
 @pool.run_in_thread
-def _translate_this(text: str, dest: str, src: str):
+def _translate_this(text: str, dest: str, src: str) -> str:
     for i in range(10):
         try:
             return Translator().translate(text, dest=dest, src=src)

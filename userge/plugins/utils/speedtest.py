@@ -1,4 +1,4 @@
-# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2022 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
@@ -7,8 +7,10 @@
 # All rights reserved.
 
 import os
-import wget
+
 import speedtest
+import wget
+
 from userge import userge, Message, pool
 from userge.utils import humanbytes
 

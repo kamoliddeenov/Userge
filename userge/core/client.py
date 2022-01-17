@@ -1,6 +1,6 @@
 # pylint: disable=missing-module-docstring
 #
-# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2022 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
@@ -10,23 +10,27 @@
 
 __all__ = ['Userge']
 
-import os
-import time
-import signal
 import asyncio
+import functools
 import importlib
+import inspect
+import os
+import signal
+import threading
+import time
 from types import ModuleType
 from typing import List, Awaitable, Any, Optional, Union
 
-from pyrogram import idle
+from pyrogram import idle, types
+from pyrogram.methods import Methods as RawMethods
 
 from userge import logging, Config, logbot
+from userge.plugins import get_all_plugins
 from userge.utils import time_formatter
 from userge.utils.exceptions import UsergeBotNotFound
-from userge.plugins import get_all_plugins
-from .methods import Methods
+from .database import get_collection
 from .ext import RawClient, pool
-from .database import get_collection, _close_db
+from .methods import Methods
 
 _LOG = logging.getLogger(__name__)
 _LOG_STR = "<<<!  #####  %s  #####  !>>>"
@@ -63,8 +67,13 @@ async def _complete_init_tasks() -> None:
 
 
 class _AbstractUserge(Methods, RawClient):
+    def __init__(self, **kwargs) -> None:
+        self._me: Optional[types.User] = None
+        super().__init__(**kwargs)
+
     @property
     def id(self) -> int:
+        """ returns client id """
         if self.is_bot:
             return RawClient.BOT_ID
         return RawClient.USER_ID
@@ -129,10 +138,23 @@ class _AbstractUserge(Methods, RawClient):
         await self.finalize_load()
         return len(reloaded)
 
+    async def get_me(self, cached: bool = True) -> types.User:
+        if not cached or self._me is None:
+            self._me = await super().get_me()
+        return self._me
+
+    async def start(self):
+        await super().start()
+        self._me = await self.get_me()
+        if self.is_bot:
+            RawClient.BOT_ID = self._me.id
+        else:
+            RawClient.USER_ID = self._me.id
+
     def __eq__(self, o: object) -> bool:
         return isinstance(o, _AbstractUserge) and self.id == o.id
 
-    def __hash__(self) -> int:
+    def __hash__(self) -> int:  # pylint: disable=W0235
         return super().__hash__()
 
 
@@ -167,8 +189,6 @@ class Userge(_AbstractUserge):
             kwargs['bot'] = UsergeBot(bot=self, **kwargs)
         kwargs['session_name'] = Config.HU_STRING_SESSION or ":memory:"
         super().__init__(**kwargs)
-        self.executor.shutdown()
-        self.executor = pool._get()  # pylint: disable=protected-access
 
     @property
     def dual_mode(self) -> bool:
@@ -215,7 +235,6 @@ class Userge(_AbstractUserge):
         _LOG.info(_LOG_STR, "Stopping Userge")
         await super().stop()
         await _set_running(False)
-        _close_db()
         pool._stop()  # pylint: disable=protected-access
 
     def begin(self, coro: Optional[Awaitable[Any]] = None) -> None:
@@ -237,7 +256,6 @@ class Userge(_AbstractUserge):
                 if self.is_initialized:
                     await self.stop()
                 else:
-                    _close_db()
                     pool._stop()  # pylint: disable=protected-access
             # pylint: disable=expression-not-assigned
             [t.cancel() for t in asyncio.all_tasks() if t is not asyncio.current_task()]
@@ -258,7 +276,10 @@ class Userge(_AbstractUserge):
                 sig, lambda _sig=sig: self.loop.create_task(_shutdown(_sig)))
 
         def _close_loop() -> None:
-            self.loop.run_until_complete(_waiter())
+            try:
+                self.loop.run_until_complete(_waiter())
+            except RuntimeError:
+                pass
             self.loop.close()
             _LOG.info(_LOG_STR, "Loop Closed !")
 
@@ -289,3 +310,36 @@ class Userge(_AbstractUserge):
             _close_loop()
             if _SEND_SIGNAL:
                 os.kill(os.getpid(), signal.SIGUSR1)
+
+
+def _un_wrapper(obj, name, function):
+    loop = asyncio.get_event_loop()
+
+    @functools.wraps(function)
+    def _wrapper(*args, **kwargs):
+        coroutine = function(*args, **kwargs)
+        if (threading.current_thread() is not threading.main_thread()
+                and inspect.iscoroutine(coroutine)):
+            async def _():
+                return await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(coroutine, loop))
+            return _()
+        return coroutine
+
+    setattr(obj, name, _wrapper)
+
+
+def _un_wrap(source):
+    for name in dir(source):
+        if name.startswith("_"):
+            continue
+        wrapped = getattr(getattr(source, name), '__wrapped__', None)
+        if wrapped and (inspect.iscoroutinefunction(wrapped)
+                        or inspect.isasyncgenfunction(wrapped)):
+            _un_wrapper(source, name, wrapped)
+
+
+_un_wrap(RawMethods)
+for class_name in dir(types):
+    cls = getattr(types, class_name)
+    if inspect.isclass(cls):
+        _un_wrap(cls)

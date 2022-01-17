@@ -1,6 +1,6 @@
 """ upload , rename and convert telegram files """
 
-# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2022 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
@@ -10,7 +10,6 @@
 
 import os
 import io
-import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +21,8 @@ from hachoir.parser import createParser
 from pyrogram.errors.exceptions import FloodWait
 
 from userge import userge, Config, Message
-from userge.utils import sort_file_name_key, progress, take_screen_shot, humanbytes
+from userge.utils import (
+    is_url, sort_file_name_key, progress, take_screen_shot, humanbytes)
 from userge.utils.exceptions import ProcessCanceled
 from userge.plugins.misc.download import tg_download, url_download
 
@@ -68,7 +68,9 @@ async def convert_(message: Message):
     'header': "Upload files to telegram",
     'flags': {
         '-d': "upload as document",
-        '-wt': "without thumb"},
+        '-wt': "without thumb",
+        '-r': "remove file after upload",
+        '-df': "don't forward to log channel"},
     'usage': "{tr}upload [flags] [file or folder path | link]",
     'examples': [
         "{tr}upload -d https://speed.hetzner.de/100MB.bin | test.bin",
@@ -79,14 +81,14 @@ async def upload_to_tg(message: Message):
     if not path_:
         await message.err("Input not foud!")
         return
-    is_url = re.search(r"(?:https?|ftp)://[^|\s]+\.[^|\s]+", path_)
+    is_path_url = is_url(path_)
     del_path = False
-    if is_url:
+    if is_path_url:
         del_path = True
         try:
             path_, _ = await url_download(message, path_)
         except ProcessCanceled:
-            await message.edit("`Process Canceled!`", del_in=5)
+            await message.canceled()
             return
         except Exception as e_e:  # pylint: disable=broad-except
             await message.err(str(e_e))
@@ -104,19 +106,21 @@ async def upload_to_tg(message: Message):
         await message.err("wrong syntax")
     else:
         await message.delete()
-        await upload_path(message, string, del_path)
+        with message.cancel_callback():
+            await upload_path(message, string, del_path)
 
 
 async def _handle_message(message: Message) -> None:
     try:
         dl_loc, _ = await tg_download(message, message.reply_to_message)
     except ProcessCanceled:
-        await message.edit("`Process Canceled!`", del_in=5)
+        await message.canceled()
     except Exception as e_e:  # pylint: disable=broad-except
         await message.err(str(e_e))
     else:
         await message.delete()
-        await upload(message, Path(dl_loc), True)
+        with message.cancel_callback():
+            await upload(message, Path(dl_loc), True)
 
 
 async def upload_path(message: Message, path: Path, del_path: bool):
@@ -149,6 +153,8 @@ async def upload(message: Message, path: Path, del_path: bool = False,
                  extra: str = '', with_thumb: bool = True):
     if 'wt' in message.flags:
         with_thumb = False
+    if 'r' in message.flags:
+        del_path = True
     if path.name.lower().endswith(
             (".mkv", ".mp4", ".webm", ".m4v")) and ('d' not in message.flags):
         await vid_upload(message, path, del_path, extra, with_thumb)
@@ -168,9 +174,7 @@ async def doc_upload(message: Message, path, del_path: bool = False,
     sent: Message = await message.client.send_message(
         message.chat.id, f"`Uploading {str_path} as a doc ... {extra}`")
     start_t = datetime.now()
-    thumb = None
-    if with_thumb:
-        thumb = await get_thumb(str_path)
+    thumb = await get_thumb(str_path) if with_thumb else None
     await message.client.send_chat_action(message.chat.id, "upload_document")
     try:
         msg = await message.client.send_document(
@@ -198,9 +202,7 @@ async def doc_upload(message: Message, path, del_path: bool = False,
 async def vid_upload(message: Message, path, del_path: bool = False,
                      extra: str = '', with_thumb: bool = True):
     str_path = str(path)
-    thumb = None
-    if with_thumb:
-        thumb = await get_thumb(str_path)
+    thumb = await get_thumb(str_path) if with_thumb else None
     duration = 0
     metadata = extractMetadata(createParser(str_path))
     if metadata and metadata.has("duration"):
@@ -366,10 +368,11 @@ async def remove_thumb(thumb: str) -> None:
 
 
 async def finalize(message: Message, msg: Message, start_t):
-    await CHANNEL.fwd_msg(msg)
+    if 'df' not in message.flags:
+        await CHANNEL.fwd_msg(msg)
     await message.client.send_chat_action(message.chat.id, "cancel")
     if message.process_is_canceled:
-        await message.edit("`Process Canceled!`", del_in=5)
+        await message.canceled()
     else:
         end_t = datetime.now()
         m_s = (end_t - start_t).seconds
