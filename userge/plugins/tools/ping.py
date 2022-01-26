@@ -8,15 +8,16 @@
 
 from datetime import datetime
 
+from pyrogram.raw.functions import Ping
+
 from userge import userge, Message
 
 
 @userge.on_cmd("ping", about={
-    'header': "check how long it takes to ping your userbot",
-    'flags': {'-a': "average ping"}}, group=-1)
+    'header': "check how long it takes to ping your userbot"}, group=-1)
 async def pingme(message: Message):
     start = datetime.now()
-    await message.edit('`Pong!`')
+    await message.client.send(Ping(ping_id=0))
     end = datetime.now()
     m_s = (end - start).microseconds / 1000
     await message.edit(f"**Pong!**\n`{m_s} ms`")
