@@ -8,15 +8,19 @@
 #
 # All rights reserved.
 
-import os
 import asyncio
+import os
 
+from dotenv import load_dotenv
 from pyrogram import Client
 from pyrogram.errors import UserIsBot
-from dotenv import load_dotenv
 
 if os.path.isfile("config.env"):
     load_dotenv("config.env")
+
+# clean-up before gen. new Str
+if os.path.exists("tools/Userge.session"):
+    os.remove("tools/Userge.session")
 
 
 async def genStrSession() -> None:  # pylint: disable=missing-function-docstring
@@ -29,7 +33,7 @@ async def genStrSession() -> None:  # pylint: disable=missing-function-docstring
         doneStr = "sent to saved messages!"
         try:
             await userge.send_message(
-                "me", f"#USERGE #HU_STRING_SESSION\n\n```{await userge.export_session_string()}```"
+                "me", f"#USERGE #HU_STRING_SESSION\n\n`{await userge.export_session_string()}`"
             )
         except UserIsBot:
             doneStr = "successfully printed!"
